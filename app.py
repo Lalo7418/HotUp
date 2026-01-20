@@ -2,69 +2,117 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+from datetime import datetime
 from utils import cargar_csv, generar_grafica
 
 if "dark_mode" not in st.session_state:
     st.session_state["dark_mode"] = True
+if "history" not in st.session_state:
+    st.session_state["history"] = []
+if "show_history" not in st.session_state:
+    st.session_state["show_history"] = False
 
 def toggle_theme():
     st.session_state["dark_mode"] = not st.session_state["dark_mode"]
 
+def toggle_history():
+    st.session_state["show_history"] = not st.session_state["show_history"]
+
 theme_dark = st.session_state["dark_mode"]
 
 if theme_dark:
-    page_css = """
+    css = """
     <style>
     :root{
         --bg:#0f1724;
+        --topbar:#09111a;
         --card:#0b1220;
         --accent:#ff6b6b;
         --accent-2:#4cc9f0;
         --muted:#9aa4b2;
     }
     body {background: var(--bg); color: #e6eef6;}
-    .stApp .block-container{padding-top:1.5rem; padding-left:2rem; padding-right:2rem;}
-    .title {font-size:56px; font-weight:800; color: #ffffff; text-align:center; margin:0;}
-    .subtitle {color: #cbd7e8; text-align:center; margin-top:8px; margin-bottom:16px;}
-    .card {background: var(--card); border-radius:12px; padding:14px; box-shadow: 0 6px 18px rgba(2,6,23,0.6);}
-    .input-summary {background: rgba(255,255,255,0.02); padding:10px; border-radius:8px; color:#e6eef6;}
-    .small-note {color:#9aa4b2; font-size:13px; text-align:center; margin-bottom:10px;}
+    .topbar {
+        background: linear-gradient(90deg, rgba(16,22,30,1), rgba(10,12,18,1));
+        padding: 18px 24px;
+        border-radius: 8px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:12px;
+    }
+    .topbar .title {font-size:34px; font-weight:800; color:#fff; margin:0;}
+    .topbar .subtitle {font-size:13px; color:var(--muted); margin:0;}
+    .card {background: var(--card); border-radius:10px; padding:12px; color:#e6eef6;}
+    .input-summary {background: rgba(255,255,255,0.02); padding:8px; border-radius:8px; color:#e6eef6;}
+    .btn-light {background:#1f2a36; color:#e6eef6; padding:6px 10px; border-radius:8px;}
+    .history-card {background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:12px; border-radius:8px;}
     </style>
     """
 else:
-    page_css = """
+    css = """
     <style>
     :root{
         --bg:#fff7ed;
-        --card:#fff1e6;
+        --topbar:#fff1e6;
+        --card:#fff6ea;
         --accent:#ff6b00;
         --accent-2:#2bbf7f;
         --muted:#6b6b6b;
-        --lemon:#ffd60a;
     }
     body {background: var(--bg); color: #0e1b2b;}
-    .stApp .block-container{padding-top:1.5rem; padding-left:2rem; padding-right:2rem;}
-    .title {font-size:56px; font-weight:800; color: #0e1b2b; text-align:center; margin:0;}
-    .subtitle {color: #40515a; text-align:center; margin-top:8px; margin-bottom:16px;}
-    .card {background: var(--card); border-radius:12px; padding:14px; box-shadow: 0 6px 18px rgba(0,0,0,0.04);}
-    .input-summary {background: rgba(0,0,0,0.02); padding:10px; border-radius:8px; color:#0e1b2b;}
-    .small-note {color:#54606a; font-size:13px; text-align:center; margin-bottom:10px;}
+    .topbar {
+        background: linear-gradient(90deg, #fff4e6, #fff9f0);
+        padding: 18px 24px;
+        border-radius: 8px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:12px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+    }
+    .topbar .title {font-size:34px; font-weight:800; color:#0e1b2b; margin:0;}
+    .topbar .subtitle {font-size:13px; color:var(--muted); margin:0;}
+    .card {background: var(--card); border-radius:10px; padding:12px; color:#0e1b2b;}
+    .input-summary {background: rgba(0,0,0,0.02); padding:8px; border-radius:8px; color:#0e1b2b;}
+    .btn-light {background:#ffdcb3; color:#0e1b2b; padding:6px 10px; border-radius:8px;}
+    .history-card {background:linear-gradient(180deg, #fffdfa, #fff9f0); padding:12px; border-radius:8px;}
     </style>
     """
 
-st.markdown(page_css, unsafe_allow_html=True)
+st.markdown(css, unsafe_allow_html=True)
 
-col_left, col_mid, col_right = st.columns([1, 2, 1])
-with col_mid:
-    st.markdown('<p class="title">HeatUp</p>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Calculadora para calentar líquidos en la cocina</p>', unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div class="topbar">
+      <div>
+        <div class="title">HeatUp</div>
+        <div class="subtitle">Calculadora para calentar líquidos en la cocina</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div>
+          <form>
+            <select id="mode_select" disabled style="padding:6px; border-radius:6px;">
+              <option>{'Oscuro' if theme_dark else 'Claro'}</option>
+            </select>
+          </form>
+        </div>
+        <div>
+          <button onclick="document.querySelector('#toggle-theme').click()" class="btn-light">Modo {'Oscuro' if not theme_dark else 'Claro'}</button>
+        </div>
+        <div>
+          <button onclick="document.querySelector('#toggle-history').click()" class="btn-light">Historial</button>
+        </div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-with col_right:
-    st.button("Alternar Modo Oscuro/Claro", key="toggle-theme", on_click=toggle_theme)
+st.button("toggle-theme", key="toggle-theme", on_click=toggle_theme, help="Alternar tema (oculto)")
+st.button("toggle-history", key="toggle-history", on_click=toggle_history, help="Mostrar / ocultar historial (oculto)")
 
-st.markdown('<div class="small-note">Cambia entre "Básico" y "Avanzado" en los parámetros. Presiona "Calcular Tiempo" para actualizar resultados y animación.</div>', unsafe_allow_html=True)
-
-modo = st.selectbox("Modo", ["Básico", "Avanzado"], index=0)
+modo = st.selectbox("Modo", ["Básico", "Avanzado"], index=0, help="Selecciona Básico o Avanzado")
 
 liquidos = {
     "Agua": {"temp_obj": 100},
@@ -108,6 +156,18 @@ if submitted:
         minutos = int(tiempo_real)
         segundos = int(round((tiempo_real - minutos) * 60))
 
+        record = {
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "tipo": tipo,
+            "volumen_ml": volumen,
+            "temp_inicial_C": temp_inicial,
+            "intensidad": fuego if fuego else "",
+            "tiempo_min": round(tiempo_real, 3)
+        }
+        st.session_state["history"].insert(0, record)
+        if len(st.session_state["history"]) > 50:
+            st.session_state["history"] = st.session_state["history"][:50]
+
         resumen_html = f"""
         <div class="input-summary">
         <strong>Tipo de líquido:</strong> {tipo} &nbsp;&nbsp;
@@ -130,23 +190,25 @@ if submitted:
             color_line = "#ff6b6b"
             color_goal = "#4cc9f0"
             text_color = "white"
-            grid_alpha = 0.15
+            grid_alpha = 0.16
+            face = "#0b1220"
         else:
             color_line = "#ff6b00"
             color_goal = "#2bbf7f"
             text_color = "#0e1b2b"
             grid_alpha = 0.12
+            face = "white"
 
-        frames = 45
+        frames = 36
         indices = np.linspace(5, t.size, frames, dtype=int)
 
         placeholder = st.empty()
         for idx in indices:
             tt = t[:idx]
             tp = temp[:idx]
-            fig, ax = plt.subplots(figsize=(6.0, 3.0), tight_layout=True)
-            fig.patch.set_facecolor("white" if not theme_dark else "#0b1220")
-            ax.set_facecolor("white" if not theme_dark else "#0b1220")
+            fig, ax = plt.subplots(figsize=(6.2, 3.2), tight_layout=True)
+            fig.patch.set_facecolor(face)
+            ax.set_facecolor(face)
             ax.plot(tt, tp, color=color_line, linewidth=2, label=f"Temperatura ({tipo})")
             ax.axhline(temp_obj, color=color_goal, linestyle="--", linewidth=1.25, label=f"Objetivo {temp_obj} °C")
             ax.set_title(f"Temperatura vs Tiempo — {tipo}", color=text_color, fontsize=12)
@@ -157,14 +219,16 @@ if submitted:
             ax.legend(fontsize=9)
             placeholder.pyplot(fig)
             plt.close(fig)
-            time.sleep(0.006)
+            time.sleep(0.004)
 
-        try:
-            df = cargar_csv("example_data.csv")
-            st.markdown("Historial")
-            fig_hist = generar_grafica(df, figsize=(5.8, 2.2), theme_dark=theme_dark)
-            st.pyplot(fig_hist)
-            plt.close(fig_hist)
-            st.dataframe(df, height=200)
-        except Exception:
-            pass
+if st.session_state["show_history"]:
+    st.markdown('<div class="history-card">', unsafe_allow_html=True)
+    st.markdown("### Historial de simulaciones recientes")
+    if st.session_state["history"]:
+        history_df = st.session_state["history"]
+        st.table(history_df[:10])
+        if st.button("Borrar historial"):
+            st.session_state["history"] = []
+    else:
+        st.markdown("No hay simulaciones guardadas.")
+    st.markdown('</div>', unsafe_allow_html=True)
