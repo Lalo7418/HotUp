@@ -6,72 +6,72 @@ from utils import generar_grafica
 
 st.set_page_config(page_title="HeatUp", layout="wide")
 
-if "dark" not in st.session_state:
-    st.session_state.dark = False
+if "theme" not in st.session_state:
+    st.session_state.theme = "kitchen"
 
 if "mode" not in st.session_state:
     st.session_state.mode = "Básico"
 
 def toggle_theme():
-    st.session_state.dark = not st.session_state.dark
+    st.session_state.theme = "dark" if st.session_state.theme == "kitchen" else "kitchen"
 
 def toggle_mode():
     st.session_state.mode = "Avanzado" if st.session_state.mode == "Básico" else "Básico"
 
-theme = "dark" if st.session_state.dark else "light"
+dark = st.session_state.theme == "dark"
 
 st.markdown(f"""
 <style>
 :root {{
-    --bg-light: #fff7ed;
+    --bg-kitchen: #fff1e6;
     --bg-dark: #0f172a;
-    --card-purple: #a855f7;
-    --card-orange: #fb923c;
-    --text-light: #1e293b;
-    --text-dark: #e5e7eb;
-}}
-
-body {{
-    background-color: {'var(--bg-dark)' if theme == 'dark' else 'var(--bg-light)'};
+    --panel-left: #7c3aed;
+    --panel-right: #fb923c;
+    --top-kitchen: linear-gradient(90deg, #ffedd5, #fde68a);
+    --top-dark: linear-gradient(90deg, #020617, #020617);
+    --text-dark: #020617;
+    --text-light: #f8fafc;
 }}
 
 .stApp {{
-    background-color: {'var(--bg-dark)' if theme == 'dark' else 'var(--bg-light)'};
-    color: {'var(--text-dark)' if theme == 'dark' else 'var(--text-light)'};
+    background-color: {'var(--bg-dark)' if dark else 'var(--bg-kitchen)'};
 }}
 
 .topbar {{
     position: sticky;
     top: 0;
     z-index: 9999;
-    background: {'#020617' if theme == 'dark' else '#fff1e6'};
-    padding: 12px 24px;
+    background: {'var(--top-dark)' if dark else 'var(--top-kitchen)'};
+    padding: 14px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid #e5e7eb;
+    border-bottom: 3px solid #f97316;
 }}
 
 .title {{
     font-size: 28px;
     font-weight: 900;
+    color: {'var(--text-light)' if dark else 'var(--text-dark)'};
 }}
 
 .controls {{
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }}
 
-.box-purple {{
-    border: 3px solid var(--card-purple);
-    border-radius: 12px;
+.panel {{
+    border-radius: 16px;
     padding: 20px;
+    color: white;
 }}
 
-.box-orange {{
-    border: 3px solid var(--card-orange);
-    border-radius: 12px;
-    padding: 20px;
+.left {{
+    background: #6d28d9;
+}}
+
+.right {{
+    background: #f97316;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -85,10 +85,10 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-col_controls = st.columns([1,1,1,1])
-with col_controls[2]:
-    st.button("🌙 / ☀️", on_click=toggle_theme)
-with col_controls[3]:
+cbar = st.columns([1,1,1,1,1])
+with cbar[3]:
+    st.button("🌙 / 🔥", on_click=toggle_theme)
+with cbar[4]:
     st.button(st.session_state.mode, on_click=toggle_mode)
 
 st.markdown("---")
@@ -107,45 +107,44 @@ fuego = {
     "Alto": 0.7
 }
 
-col_left, col_right = st.columns(2)
+col_l, col_r = st.columns(2)
 
-with col_left:
-    st.markdown('<div class="box-purple">', unsafe_allow_html=True)
-    tipo = st.selectbox("Tipo de líquido", list(liquidos.keys()))
+with col_l:
+    st.markdown('<div class="panel left">', unsafe_allow_html=True)
+    st.subheader("Parámetros de cocina")
+    tipo = st.selectbox("Líquido", list(liquidos.keys()))
     cantidad = st.number_input("Cantidad (ml)", 50, 2000, 250, 50)
-    intensidad = st.selectbox("Intensidad de fuego", list(fuego.keys()))
+    intensidad = st.selectbox("Fuego", list(fuego.keys()))
     calcular = st.button("Calcular tiempo")
     st.markdown('</div>', unsafe_allow_html=True)
 
-with col_right:
-    st.markdown('<div class="box-orange">', unsafe_allow_html=True)
+with col_r:
+    st.markdown('<div class="panel right">', unsafe_allow_html=True)
 
     if calcular:
-        temp_inicial = 25
-        temp_final = liquidos[tipo]
-        tiempo_min = max((cantidad * (temp_final - temp_inicial)) / 8000 * fuego[intensidad], 0.2)
+        temp_i = 25
+        temp_f = liquidos[tipo]
+        tiempo_min = max((cantidad * (temp_f - temp_i)) / 8000 * fuego[intensidad], 0.2)
         tiempo_seg = tiempo_min * 60
 
-        st.metric("Tiempo estimado", f"{tiempo_min:.2f} min")
+        st.metric("Tiempo estimado", f"{tiempo_min:.2f} minutos")
 
         t = np.linspace(0, tiempo_seg, 300)
         k = -np.log(0.01) / tiempo_seg
-        temp = temp_final - (temp_final - temp_inicial) * np.exp(-k * t)
+        temp = temp_f - (temp_f - temp_i) * np.exp(-k * t)
 
-        df = pd.DataFrame({
-            "Tiempo (s)": t,
-            "Temperatura (°C)": temp
-        })
+        df = pd.DataFrame({"Tiempo": t, "Temperatura": temp})
 
-        placeholder = st.empty()
+        slot = st.empty()
         frames = 40
         delay = 3 / frames
+
         for i in np.linspace(5, len(df), frames, dtype=int):
-            fig = generar_grafica(df.iloc[:i], theme == "dark")
-            placeholder.pyplot(fig)
+            fig = generar_grafica(df.iloc[:i], dark)
+            slot.pyplot(fig)
             time.sleep(delay)
 
     else:
-        st.info("Aquí se mostrará la gráfica de calentamiento")
+        st.info("La gráfica aparecerá aquí")
 
     st.markdown('</div>', unsafe_allow_html=True)
